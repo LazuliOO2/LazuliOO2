@@ -1,0 +1,48 @@
+{
+  "username": "LazuliOO2",
+  "name": "DIOGO REIS LAGO",
+  "contacts": {
+    "GITHUB_URL": "https://github.com/LazuliOO2",
+    "LINKEDIN_URL": "https://www.linkedin.com/in/diogo-dos-reis-lago-68a944209",
+    "EMAIL_URL": "mailto:olazulioo2@gmail.com",
+    "PORTFOLIO_URL": "https://lazulioo2.github.io/diogoreis/"
+  },
+  "projects": [
+    {
+      "key": "BACKEND", "category": "BACK-END", "asset": "backend",
+      "REPO_BACKEND_URL": "https://github.com/LazuliOO2/Back-End",
+      "REPO_BACKEND_NAME": "Back-End",
+      "REPO_BACKEND_DESCRIPTION": "APIs, persistência de dados e lógica de negócio em projetos de desenvolvimento backend.",
+      "REPO_BACKEND_STACK": "JavaScript • PHP • TypeScript • SQL"
+    },
+    {
+      "key": "FRONTEND", "category": "FRONT-END", "asset": "frontend",
+      "REPO_FRONTEND_URL": "https://github.com/LazuliOO2/Front-End",
+      "REPO_FRONTEND_NAME": "Front-End",
+      "REPO_FRONTEND_DESCRIPTION": "Interfaces responsivas, aplicações React e experiências construídas com componentes.",
+      "REPO_FRONTEND_STACK": "React • JavaScript • HTML • Sass"
+    },
+    {
+      "key": "FULLSTACK", "category": "FULLSTACK", "asset": "fullstack",
+      "REPO_FULLSTACK_URL": "https://github.com/LazuliOO2/Full-Stack-",
+      "REPO_FULLSTACK_NAME": "Full-Stack-",
+      "REPO_FULLSTACK_DESCRIPTION": "Projetos que conectam interfaces e serviços, explorando o desenvolvimento de ponta a ponta.",
+      "REPO_FULLSTACK_STACK": "TypeScript • PHP • Vue • Go"
+    },
+    {
+      "key": "WORKBENCH", "category": "WORKBENCH", "asset": "workbench",
+      "REPO_WORKBENCH_URL": "https://github.com/LazuliOO2/workbench",
+      "REPO_WORKBENCH_NAME": "workbench",
+      "REPO_WORKBENCH_DESCRIPTION": "Laboratório de dados, machine learning, pipelines ETL, automação e web scraping.",
+      "REPO_WORKBENCH_STACK": "Python • Go • Jupyter • Streamlit"
+    }
+  ],
+  "stack": [
+    ["BACKEND", "Node.js • PHP • Python • Go", "APIs / lógica / serviços"],
+    ["FRONTEND", "React • TypeScript • HTML • Sass", "Interfaces / componentes"],
+    ["DATABASE", "MySQL • MongoDB • Redis", "Persistência / consultas / cache"],
+    ["DEVOPS / CLOUD", "Docker • GitHub Actions • AWS", "Containers / entrega / estudo"],
+    ["AI / DATA", "Pandas • NumPy • Scikit-learn", "ETL / análise / machine learning"],
+    ["TOOLS", "Git • Jupyter • Postman", "Versionamento / exploração / APIs"]
+  ]
+}

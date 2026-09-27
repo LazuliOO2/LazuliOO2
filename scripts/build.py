@@ -1,170 +1,176 @@
-"""Build local SVG panels and README. Python standard library only."""
-from pathlib import Path
-from html import escape as esc
+"""Generate GitHub-compatible SVG panels and README. Python standard library only."""
 import json
 import textwrap
+from html import escape
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / 'assets'
-CYAN, GREEN, TEXT, MUTED = '#00f0ff', '#4edea3', '#dbfcff', '#b9cacb'
-BG, PANEL, INSET, BORDER = '#051424', '#122131', '#010f1f', '#273647'
+A = ROOT / 'assets'
+DATA = json.loads((A / 'profile.json').read_text(encoding='utf-8-sig'))
+TELEMETRY = json.loads((A / 'telemetry.json').read_text(encoding='utf-8-sig'))
+GREEN, CYAN, WHITE, MUTED, PURPLE = '#39ff88', '#37dfff', '#e6f1f5', '#94aab9', '#b599ff'
 
-def rect(x, y, w, h, fill=PANEL, stroke=BORDER):
-    return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="5" fill="{fill}" stroke="{stroke}"/>'
+def txt(x, y, value, size=16, color=WHITE, weight='400', mono=True):
+    font = 'Consolas,monospace' if mono else 'Segoe UI,Arial,sans-serif'
+    return f'<text x="{x}" y="{y}" fill="{color}" font-family="{font}" font-size="{size}" font-weight="{weight}">{escape(str(value))}</text>'
 
-def text(x, y, value, size=14, color=TEXT, mono=True, weight=400):
-    font = 'Consolas,DejaVu Sans Mono,monospace' if mono else 'Segoe UI,Arial,sans-serif'
-    return f'<text x="{x}" y="{y}" fill="{color}" font-family="{font}" font-size="{size}" font-weight="{weight}">{esc(str(value))}</text>'
+def lines(x, y, value, width, size=16, color=MUTED, step=25):
+    rows = textwrap.wrap(value, width=width)
+    return ''.join(txt(x, y+i*step, row, size, color, mono=False) for i, row in enumerate(rows))
 
-def line(x1,y1,x2,y2,color=CYAN):
-    return f'<path d="M{x1} {y1}H{x2}V{y2}" fill="none" stroke="{color}" stroke-width="1.5"/>'
+def line(x1,y1,x2,y2,color='#203943'):
+    return f'<path d="M{x1} {y1}H{x2}" stroke="{color}"/>' if y1==y2 else f'<path d="M{x1} {y1}L{x2} {y2}" stroke="{color}"/>'
 
-def svg(name,w,h,body,title):
-    out=f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" aria-labelledby="title"><title id="title">{esc(title)}</title>{rect(0.5,0.5,w-1,h-1,BG)}{body}</svg>\n'
-    (ASSETS/f'{name}.svg').write_text(out,encoding='utf-8')
+def rect(x,y,w,h,fill='#0d1820',stroke='#203943',radius=4):
+    return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{radius}" fill="{fill}" stroke="{stroke}"/>'
 
-def picture(name,alt,mobile=False):
-    img=f'<img src="assets/{name}.svg" width="100%" alt="{esc(alt,quote=True)}">'
-    return f'<picture>\n  <source media="(max-width: 600px)" srcset="assets/{name}-mobile.svg">\n  {img}\n</picture>' if mobile else img
+def panel(name, w, h, body, title):
+    grid = ''.join(line(x,1,x,h-1,'#101c23') for x in range(20,w,40))
+    grid += ''.join(line(1,y,w-1,y,'#101c23') for y in range(20,h,40))
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" role="img" aria-labelledby="title"><title id="title">{escape(title)}</title>'
+    svg += rect(1,1,w-2,h-2,'#080d12') + f'<g opacity="0.5">{grid}</g>'
+    svg += f'<path d="M1 26V1H72 M{w-72} {h-1}H{w-1}V{h-26}" stroke="{GREEN}" stroke-width="2" fill="none"/>'
+    svg += body + '</svg>'
+    (A / f'{name}.svg').write_text(svg, encoding='utf-8')
 
-def section(n,anchor,label,sub):
-    body=rect(16,16,35,35,INSET)+text(23,39,f'{n:02}',16,CYAN)+text(65,29,sub,11,GREEN)+text(65,52,label,21,TEXT,True,700)
-    svg(anchor+'-label',800,70,body,label)
-    # Compact label avoids shrinking terminal typography on narrow screens.
-    body=text(16,23,f'{n:02} // {sub}',10,GREEN)+text(16,48,label,17,TEXT,True,700)
-    svg(anchor+'-label-mobile',380,64,body,label)
-    return f'<a name="{anchor}"></a>\n\n'+picture(anchor+'-label',f'{n:02} // {label}',True)+'\n\n'
+def top(w, code, title):
+    return txt(24,31,code,12,GREEN)+txt(24,64,title,22,WHITE,'700')+line(24,82,w-24,82)
 
-def build():
-    d=json.loads((ASSETS/'profile-data.json').read_text(encoding='utf-8'))
-    t=json.loads((ASSETS/'telemetry.json').read_text(encoding='utf-8'))
-    login=t['login']
-    for mobile in (False,True):
-        w=380 if mobile else 800
-        suffix='-mobile' if mobile else ''
-        b=''.join(f'<circle cx="{20+i*14}" cy="22" r="4" fill="{c}"/>' for i,c in enumerate(['#ffb4ab','#00a572',GREEN]))
-        b+=text(16,52,'DRL-SYSTEM // OBSERVE-CORE',13,CYAN)+text(16,75,'ENGINEERING CONTROL CENTER',10,MUTED)
-        if not mobile: b+=text(564,51,'BRAZIL / UTC-3',13,GREEN)+text(564,75,'SOFTWARE · DATA · CLOUD',11,MUTED)
-        svg('header'+suffix,w,94,b,'DRL-System — engineering control center')
+def picture(name, alt):
+    return f'<picture>\n  <source media="(max-width: 600px)" srcset="assets/{name}-mobile.svg">\n  <img src="assets/{name}.svg" width="100%" alt="{escape(alt, quote=True)}">\n</picture>'
 
-        h=540 if mobile else 345
-        b=rect(16,16,w-32,30,INSET)+text(28,36,'01 // PROFILE_SCAN.EXE',12,CYAN)
-        x,y=(24,78) if mobile else (278,85)
-        # Wireframe monogram echoes the original terminal glyph.
-        if not mobile:
-            b+=rect(24,66,226,253,INSET)
-            b+='<g transform="translate(85 85)" fill="none" stroke="#00f0ff"><rect width="100" height="100" rx="5" stroke-dasharray="4 3" opacity=".5"/><path d="M25 20H55C80 20 80 48 55 48H25V20M25 48H56C83 48 83 80 56 80H25V48" stroke-width="2"/><path d="M10 50H90" opacity=".4"/><circle cx="50" cy="50" r="3" fill="#00f0ff"/></g>'
-            for i,v in enumerate(['> software_engineering.core','> data_ml_pipeline.engine','> cloud_devops.runtime']): b+=text(36,224+i*27,v,11,GREEN)
-            b+=text(36,305,'READY_FOR_DEPLOYMENT',11,CYAN)
-        b+=text(x,y,'SYSTEM OPERATOR SPECIFICATION',10,CYAN)
-        b+=text(x,y+37,'DIOGO DOS REIS LAGO',25 if mobile else 29,TEXT,False,700)
-        for i,v in enumerate(['Software Engineer','Data & Machine Learning','Cloud & DevOps']): b+=text(x,y+69+i*25,v,16,GREEN if i==0 else MUTED,False)
-        b+=rect(x,y+137,w-x-24,67,PANEL)+text(x+12,y+161,'Software Engineering Student',13,TEXT,False)+text(x+12,y+187,'Brazil [BR] // UTC-3',12,CYAN)
-        b+=text(x,y+233,'Building, learning and shipping.',15,TEXT,False)
-        if mobile:
-            for i,v in enumerate(['AVAILABLE_FOR_WORK','BUILDING_AT_SCALE','CONTINUOUS_LEARNING']):
-                b+=rect(24,341+i*43,332,32,PANEL)+text(36,362+i*43,'● '+v,12,GREEN if i==0 else CYAN)
-            b+=text(24,494,'Full Stack · Data Pipelines',13,MUTED,False)+text(24,517,'Cloud Infra',13,MUTED,False)
-        svg('profile-terminal'+suffix,w,h,b,'Diogo dos Reis Lago; Software Engineer; Data & Machine Learning; Cloud & DevOps; Software Engineering Student; Brazil UTC-3. Building, learning and shipping.')
+for mobile in (False, True):
+    w = 420 if mobile else 900
+    suffix = '-mobile' if mobile else ''
+    b = txt(24,32,'DRL / DEVELOPER COMMAND CENTER',12,GREEN)
+    b += line(24,48,w-24,48)
+    for i,s in enumerate(['[ SYSTEM BOOT ]','> INITIALIZING DEVELOPER PROFILE...', '> LOADING PROJECTS...','> CONNECTING TO GITHUB...','> SYSTEM ONLINE ✓']):
+        b += txt(24,78+i*23,s,13,GREEN if i in (0,4) else MUTED)
+    b += txt(24,244,'DIOGO' if mobile else DATA['name'],48 if mobile else 56,WHITE,'700',False)
+    if mobile:
+        b += txt(24,293,'REIS LAGO',48,WHITE,'700',False)
+    y=327 if mobile else 282
+    b += txt(24,y,'SOFTWARE ENGINEERING',15,CYAN)
+    b += txt(24,y+28,'Full Stack / Backend / AI / DevOps',13,MUTED)
+    b += line(24,y+49,w-24,y+49)
+    b += txt(24,y+76,'01 OPERATOR  /  04 PROJECT NODES',12,GREEN)
+    if not mobile:
+        for r in (45,70,95):
+            b += f'<circle cx="770" cy="136" r="{r}" fill="none" stroke="#203943"/>'
+        b += f'<path d="M655 136H885 M770 21V251 M709 197L831 75" stroke="{CYAN}" opacity="0.4"/>'
+        b += txt(739,147,'DRL',28,GREEN,'700')
+        b += f'<circle cx="831" cy="75" r="5" fill="{GREEN}"/>'
+    panel('header'+suffix,w,y+100,b,'Diogo Reis Lago / Developer Command Center')
 
-        steps=[('CODE','Clean Arch / Typing'),('LOCAL TESTS','PyTest / Unit Matrix'),('MERGE REQUEST','Code Review & Lint'),('DEPLOY','Docker / Registry'),('CLOUD','AWS / Clusters'),('VALIDATION','Prometheus / Health')]
-        b=text(20,29,'SERPRO_DATA_SCIENCE // DELIVERY PIPELINE',11,CYAN)
-        for i,(name,desc) in enumerate(steps):
-            x,y=(24,52+i*91) if mobile else (20+(i%3)*260,54+(i//3)*117)
-            if mobile and i<5: b+=line(190,y+71,190,y+91)
-            b+=rect(x,y,332 if mobile else 240,71)+text(x+12,y+21,f'{i+1:02} / {name}',13,GREEN if i==5 else TEXT,True,700)+text(x+12,y+47,desc,11,MUTED)
-            b+=f'<path d="M{x+12} {y+60}h{308 if mobile else 216}" stroke="{GREEN}"/>'
-        if not mobile:
-            b+=line(260,88,280,88)+line(520,88,540,88)
-            b+='<path d="M660 125V149H140V171M260 205H280M520 205H540" fill="none" stroke="#00f0ff"/>'
-        svg('mission-pipeline'+suffix,w,610 if mobile else 265,b,'CODE → LOCAL TESTS → MERGE REQUEST → DEPLOY → CLOUD → VALIDATION. Workflow architecture, not live execution status.')
+    b=top(w,'01 / IDENTITY MODULE','PROFILE_SCAN.exe')
+    fields=[('ROLE',['Software Engineering Student','Full Stack Developer']),('FOCUS',['Backend • Full Stack • AI • DevOps']),('LOCATION',['Belo Horizonte - MG - Brazil']),('STATUS',['AVAILABLE / BUILDING / LEARNING'])]
+    y=115
+    for label, values in fields:
+        b+=txt(24,y,label,12,CYAN)
+        for j,v in enumerate(values): b+=txt(24,y+26+j*23,v,15,WHITE)
+        y+=52+23*len(values)
+    if not mobile:
+        b+=rect(570,110,300,250)
+        for i,s in enumerate(['     ┌──────────┐','     │  ▪    ▪  │','     │    ──    │','     └────┬─────┘','    ┌─────┴──────┐','    │  </ DRL >  │','    └────────────┘']):
+            b+=txt(590,143+i*25,s,18,GREEN)
+        b+=txt(600,341,'HUMAN BEHIND THE CODE',12,MUTED)
+    panel('profile-scan'+suffix,w,y+6,b,'Perfil profissional: estudante de Engenharia de Software e desenvolvedor Full Stack')
 
-        b=''.join(f'<path d="M{xx} 0V{680 if mobile else 335}" stroke="{BORDER}" opacity=".18"/>' for xx in range(0,w,24))
-        def node(x,y,ww,title,lines):
-            q=rect(x,y,ww,86,INSET)+text(x+14,y+25,title,12,CYAN,True,700)
-            for i,v in enumerate(lines): q+=text(x+14,y+48+i*19,v,11,MUTED,False)
-            return q
-        if mobile:
-            b+=node(24,20,332,'SOFTWARE ENGINEERING CORE',['Full Stack · Data Pipelines · Cloud Infra'])
-            b+=line(16,63,16,590)
-            for i,(title,lines) in enumerate([('BACKEND & SYSTEMS',['Go · Python · Node · Redis','APIs · concurrency · async workers']),('DATA & MACHINE LEARNING',['Scikit · TensorFlow · spaCy · Pandas','Reinforcement learning · ETL · NLP']),('CLOUD ARCHITECTURE',['AWS · Docker · GCP · VPC','Containers · networking · storage'])]):
-                y=143+i*127;b+=line(16,y+43,24,y+43)+node(24,y,332,title,lines)
-            b+=line(16,63,24,63)+line(16,590,24,590)+node(24,547,332,'DEVOPS & PLATFORM ENGINEERING',['Reliability · GitHub Actions · delivery','Container runtimes · telemetry'])
-        else:
-            b+=node(240,16,320,'SOFTWARE ENGINEERING CORE',['Full Stack · Data Pipelines · Cloud Infra'])
-            b+='<path d="M400 102V120M140 136V120H660V136M400 120V136M140 222V240H660V222M400 222V254" stroke="#00f0ff" fill="none"/>'
-            b+=node(20,136,240,'BACKEND & SYSTEMS',['Go · Python · Node · Redis','APIs · concurrency · async workers'])
-            b+=node(280,136,240,'DATA & MACHINE LEARNING',['Scikit · TensorFlow · spaCy · Pandas','Reinforcement learning · ETL · NLP'])
-            b+=node(540,136,240,'CLOUD ARCHITECTURE',['AWS · Docker · GCP · VPC','Containers · networking · storage'])
-            b+=node(240,254,320,'DEVOPS & PLATFORM ENGINEERING',['Reliability · GitHub Actions · delivery','Container runtimes · telemetry'])
-        svg('engineering-map'+suffix,w,654 if mobile else 357,b,'Software Engineering Core branches into Backend & Systems, Data & Machine Learning and Cloud Architecture, converging in DevOps & Platform / Reliability Engineering.')
+    b=top(w,'02 / INSTALLED MODULES','TECH_STACK.sys')
+    for i,(label,stack,desc) in enumerate(DATA['stack']):
+        x=24 if mobile else 24+(i%2)*438
+        y=104+(i if mobile else i//2)*116
+        cw=372 if mobile else 414
+        b+=rect(x,y,cw,102)
+        b+=txt(x+16,y+25,label,13,CYAN)
+        b+=txt(x+16,y+54,stack,14,WHITE,mono=False)
+        b+=txt(x+16,y+79,desc,12,MUTED)
+    panel('tech-stack'+suffix,w,816 if mobile else 468,b,'Tecnologias por categoria; ferramentas utilizadas e áreas em desenvolvimento')
 
-        b=text(20,28,'GITHUB REST API // PUBLIC SNAPSHOT',11,CYAN)
-        metrics=[('PUBLIC_REPOS',t['public_repos']),('PULL_REQUESTS',t['pull_requests']),('REPO_STARS',t['stars']),('FOLLOWERS',t['followers'])]
-        for i,(label,value) in enumerate(metrics):
-            x,y=(20+(i%2)*180,48+(i//2)*103) if mobile else (20+i*195,48)
-            b+=rect(x,y,160 if mobile else 175,87)+text(x+12,y+24,label,11,MUTED)+text(x+12,y+64,f'{value:,}',30,GREEN)
-        base=279 if mobile else 170
-        b+=text(20,base,'PRIMARY LANGUAGE / REPOSITORY COUNT',10,CYAN)
-        total=sum(t['languages'].values())
-        for i,(language,count) in enumerate(t['languages'].items()):
-            y=base+29+i*28
-            b+=text(20,y,language,12,TEXT)+rect(151,y-11, max(1,(w-239)*count/max(total,1)),10,GREEN,GREEN)+text(w-63,y,str(count),12,MUTED)
-        end=base+len(t['languages'])*28+40
-        b+=text(20,end,'@'+login+' / '+t['fetched_at'][:10]+' UTC',11,MUTED)
-        svg('github-telemetry'+suffix,w,end+22,b,f"GitHub snapshot for {login}: {t['public_repos']} public repositories; {t['pull_requests']} authored public pull requests; {t['stars']} stars on owned public repositories; {t['followers']} followers. Primary languages by non-fork repository count.")
+    for n,p in enumerate(DATA['projects'],1):
+        k='REPO_'+p['key']+'_'
+        b=txt(24,32,f'PROJECT_0{n} / {p["category"]}',13,GREEN)
+        b+=line(24,49,w-24,49)
+        b+=txt(24,91,p[k+'NAME'],30,WHITE,'700',False)
+        b+=lines(24,125,p[k+'DESCRIPTION'],44 if mobile else 93,17,step=25)
+        sy=210 if mobile else 185
+        b+=txt(24,sy,'STACK /',11,CYAN)
+        b+=txt(24,sy+26,p[k+'STACK'],14,WHITE,mono=False)
+        b+=rect(24,sy+47,w-48,40,'#10271f','#235d42')
+        b+=txt(40,sy+73,'ACCESS REPOSITORY →',14,GREEN,'700')
+        panel('project-card-'+p['asset']+suffix,w,sy+108,b,p[k+'NAME']+' — '+p[k+'DESCRIPTION']+' Stack: '+p[k+'STACK'])
 
-        b=''
-        for i,m in enumerate(d['modules']):
-            x,y=(16,16+i*161) if mobile else (16+(i%2)*392,16+(i//2)*161)
-            ww=348 if mobile else 376
-            b+=rect(x,y,ww,145)+text(x+14,y+26,m['name'],13,CYAN,True,700)
-            b+=text(x+14,y+49,'● INSTALLED',10,GREEN)
-            lines=textwrap.wrap(' · '.join(m['tags']),width=38 if mobile else 41)
-            for j,v in enumerate(lines): b+=text(x+14,y+76+j*23,v,12,TEXT)
-            b+=f'<path d="M{x+14} {y+131}h{ww-28}" stroke="{BORDER}"/>'
-        svg('tech-stack'+suffix,w,982 if mobile else 499,b,'Installed modules: '+ '; '.join(m['name']+': '+', '.join(m['tags']) for m in d['modules']))
+    b=top(w,'04 / PUBLIC SIGNALS','GITHUB_TELEMETRY')
+    b+=txt(24,109,'SNAPSHOT / '+TELEMETRY['date']+' UTC',12,CYAN)
+    stats=[('PUBLIC REPOS',TELEMETRY['repositories']),('REPO STARS',TELEMETRY['stars']),('FOLLOWERS',TELEMETRY['followers'])]
+    for i,(label,value) in enumerate(stats):
+        x=24+i*(124 if mobile else 285)
+        b+=txt(x,160,value,36,GREEN,'700')+txt(x,184,label,11,MUTED)
+    b+=line(24,204,w-24,204)+txt(24,233,'LANGUAGE DISTRIBUTION / BYTES',12,CYAN)
+    langs=sorted(TELEMETRY['languages'].items(),key=lambda item:item[1],reverse=True)[:5]
+    total=sum(TELEMETRY['languages'].values())
+    for i,(label,value) in enumerate(langs):
+        y=265+i*48
+        b+=txt(24,y,label,14,WHITE)+txt(w-88,y,f'{value/total:.1%}',13,MUTED)
+        b+=rect(24,y+11,w-48,6,'#152831','#152831',2)
+        b+=rect(24,y+11,round((w-48)*value/total,1),6,GREEN if i%2==0 else CYAN,GREEN if i%2==0 else CYAN,2)
+    b+=txt(24,523,'PUBLIC CODE / NOT A SKILL RATING',11,MUTED)
+    panel('telemetry'+suffix,w,549,b,'GitHub: '+str(TELEMETRY['repositories'])+' repositórios públicos; distribuição de linguagens por bytes. Snapshot '+TELEMETRY['date'])
 
-    svg('footer-terminal',800,72,text(20,29,'$ exit // DRL-NODE',14,CYAN)+text(20,53,'Building, learning and shipping.',13,MUTED,False)+text(632,43,'PROMPT_READY',12,GREEN),'Session complete. Building, learning and shipping.')
-    svg('footer-terminal-mobile',380,94,text(16,27,'$ exit // DRL-NODE',13,CYAN)+text(16,52,'Building, learning and shipping.',13,MUTED,False)+text(16,77,'PROMPT_READY',11,GREEN),'Session complete. Building, learning and shipping.')
-    md='<!-- Generated by scripts/build.py. Edit assets/profile-data.json for projects, modules and study areas. -->\n\n'
-    md+=picture('header','DRL-System // Observe-Core — Engineering Control Center',True)+'\n\n'
-    md+='<p align="center">'+ ' · '.join(f'<a href="#{a}">{v}</a>' for a,v in [('profile','PROFILE'),('mission','MISSION'),('stack','STACK'),('projects','PROJECTS'),('graph','MAP'),('metrics','METRICS'),('exploring','EXPLORING'),('contact','CONTACT')])+'</p>\n\n'
-    md+='<a name="profile"></a>\n\n'+picture('profile-terminal','Diogo dos Reis Lago — Software Engineer; Data & Machine Learning; Cloud & DevOps. Software Engineering Student. Brazil // UTC-3. Building, learning and shipping.',True)+'\n\n'
-    md+='<p align="center"><code>AVAILABLE_FOR_WORK</code> · <code>BUILDING_AT_SCALE</code> · <code>CONTINUOUS_LEARNING</code><br>Full Stack · Data Pipelines · Cloud Infra</p>\n\n'
-    md+='<p align="center"><a href="#contact">[ ESTABLISH_CONNECTION ]</a> &nbsp; <a href="#projects">[ VIEW_REPOSITORIES ]</a></p>\n\n'
-    md+=section(2,'mission','CURRENT_MISSION','ACTIVE ASSIGNMENT')
-    md+='**Data Science Intern · SERPRO**  \nSerpro — Serviço Federal de Processamento de Dados  \n`Cloud` · `ML` · `Infrastructure`\n\nEnterprise scale data processing & model deployment. CI/CD Continuous Delivery — automated testing, container runtime & telemetry.\n\n'
-    md+=picture('mission-pipeline','Pipeline: CODE → LOCAL TESTS → MERGE REQUEST → DEPLOY → CLOUD → VALIDATION.',True)+'\n\n'
-    md+=section(3,'stack','TECH_ARSENAL','RUNTIME_ENVIRONMENT // INSTALLED_MODULES')
-    md+=picture('tech-stack','Installed modules: Frontend, Backend, Data & ML, Database, Cloud & DevOps, Testing & QA. Expand below for all technologies and module descriptions.',True)+'\n\n<details>\n<summary>Inspect installed modules / technologies & responsibilities</summary>\n\n<table>\n'
-    for m in d['modules']:
-        md+='<tr><td>\n<p><strong><samp>'+esc(m['name'])+'</samp></strong> &nbsp; <samp>[INSTALLED]</samp></p>\n<p>'+esc(m['description'])+'</p>\n<p>'+' · '.join('<code>'+esc(tag)+'</code>' for tag in m['tags'])+'</p>\n</td></tr>\n'
-    md+='</table>\n\n</details>\n\n'+section(4,'projects','SELECTED_PROJECTS','CURATED ARTIFACTS // REPOSITORY_NODES')
-    for i,p in enumerate(d['projects'],1):
-        md+='<table>\n<tr><td>\n<p><samp>┌─ REPOSITORY_NODE_'+f'{i:02}'+' ── '+esc(p['category'][1])+'</samp></p>\n'
-        md+='<p><samp>'+esc(p['category'][0].split(' // ',1)[-1])+'</samp></p>\n'
-        title=esc(p['name'])
-        if p['url']: title=f'<a href="{esc(p["url"],quote=True)}">{title}</a>'
-        md+='<p><strong>'+title+'</strong></p>\n<p>'+esc(p['description'])+'</p>\n<p>'+' · '.join('<code>'+esc(tag)+'</code>' for tag in p['tags'])+'</p>\n'
-        md+=f'<p><a href="{esc(p["url"],quote=True)}">[ OPEN_REPOSITORY ]</a></p>\n' if p['url'] else '<p><code>REPOSITORY_URL_REQUIRED</code></p>\n'
-        md+='</td></tr>\n</table>\n\n'
-    md+=section(5,'graph','ENGINEERING_MAP','SYSTEM_TOPOLOGY')+picture('engineering-map','Software Engineering Core → Backend & Systems / Data & Machine Learning / Cloud Architecture → DevOps & Platform Engineering, with a focus on reliability.',True)+'\n\n'
-    md+='<details>\n<summary>Inspect topology / architecture notes</summary>\n\n'
-    md+='**Backend & Systems:** High throughput APIs, Golang concurrency, async workers & microservices. Go · Python · Node · Redis.\n\n**Data & Machine Learning:** Reinforcement learning, ETL pipelines, NLP parsers & predictive analytics. Scikit · TensorFlow · spaCy · Pandas.\n\n**Cloud Architecture:** Containers, auto-scaling environments, secure networking & storage. AWS · Docker · GCP · VPC.\n\n**DevOps & Reliability Engineering:** Continuous delivery (GitHub Actions), containerized runtimes, telemetry metrics, and high uptime operations.\n\n</details>\n\n'
-    md+=section(6,'metrics','SYSTEM_METRICS','GITHUB_TELEMETRY')+picture('github-telemetry',f"GitHub @{login}: {t['public_repos']} public repos, {t['pull_requests']} authored public PRs, {t['stars']} repository stars, {t['followers']} followers. Snapshot {t['fetched_at']}.",True)+'\n\n'
-    md+=f'<details>\n<summary>Inspect telemetry / source & scope</summary>\n\nSnapshot: **{t["fetched_at"]}** · [@{login}](https://github.com/{login}) · [Source data](assets/telemetry.json).\n\n'
-    md+='Public repositories include forks. Pull requests count public PRs authored by this account, across all states; they do not imply approval or merge. Stars are summed across owned public repositories. Languages count the primary language of each non-fork public repository with a detected language; they do not measure proficiency or lines of code.\n\n'
-    md+='Commits, contributions and streak are omitted because this snapshot does not provide reliable totals.\n\n</details>\n\n'
-    md+=section(7,'exploring','CURRENTLY_EXPLORING','ASYNC_THREADS // ACTIVE_DAEMONS')+'<table>\n'
-    for i,p in enumerate(d['exploring']):
-        status='INITIALIZING' if i==3 else 'RUNNING'
-        md+='<tr><td><p><samp>'+esc(p['name'])+'</samp><br><samp>['+status+']</samp></p><p>'+esc(p['description'])+'</p></td></tr>\n'
-    md+='</table>\n\n'+section(8,'contact','ESTABLISH_CONNECTION','COMMAND_DISPATCH // CLI_SHELL')
-    md+='<table>\n'
-    for cmd,label,url in [('github --profile','github.com/'+login,'https://github.com/'+login),('linkedin --connect','linkedin.com/in/diogodoreislago','https://linkedin.com/in/diogodoreislago'),('mail --protocol=smtp','contact@diogolago.dev','mailto:contact@diogolago.dev'),('ping --portfolio','dev.diogolago.tech','https://dev.diogolago.tech')]:
-        md+=f'<tr><td><samp>$ {cmd}</samp><br><a href="{url}">{label}</a></td></tr>\n'
-    md+='</table>\n\n'+picture('footer-terminal','DRL-Node // Prompt ready. Building, learning and shipping.',True)+'\n'
-    (ROOT/'README.md').write_text(md,encoding='utf-8')
+    contributions=TELEMETRY.get('contributions',[])
+    if contributions:
+        recent=contributions[-31:]
+        b=top(w,'04.1 / CONTRIBUTION SIGNAL','ACTIVITY_LOG')
+        b+=txt(24,113,f'{sum(d["count"] for d in recent)} CONTRIBUTIONS / LAST 31 DAYS',13,GREEN)
+        chartw=w-48
+        peak=max(1,max(d['count'] for d in recent))
+        for i,d in enumerate(recent):
+            bh=100*d['count']/peak
+            b+=rect(round(24+i*chartw/31,2),round(242-bh,2),round(chartw/31-3,2),max(2,round(bh,2)),GREEN if d['count'] else '#203943','none',1)
+        b+=txt(24,270,recent[0]['date'],12,MUTED)+txt(w-110,270,recent[-1]['date'],12,MUTED)
+        b+=line(24,291,w-24,291)
+        b+=txt(24,324,f'CURRENT STREAK / {TELEMETRY["current_streak"]} DAYS',14,CYAN)
+        b+=txt(24,351,f'LONGEST IN WINDOW / {TELEMETRY["longest_streak"]} DAYS',14,MUTED)
+        panel('activity'+suffix,w,378,b,'Contribuições diárias nos últimos 31 dias e sequências do calendário público; snapshot '+TELEMETRY['date'])
 
-if __name__=='__main__': build()
+    b=top(w,'05 / EXECUTION QUEUE','CURRENT_MISSION')
+    missions=['Building scalable systems','Exploring applied AI','Improving backend architecture','Learning DevOps & Cloud','Shipping useful projects']
+    for i,s in enumerate(missions): b+=txt(24,120+i*36,'> '+s,15,GREEN if i==0 else WHITE)
+    panel('mission'+suffix,w,296,b,'Missão atual: sistemas escaláveis, IA aplicada, arquitetura backend, DevOps e entrega de projetos')
+    b=txt(24,35,'> SESSION STATUS: ACTIVE',14,GREEN)+txt(24,65,'> SYSTEM: ONLINE',14,WHITE)+txt(24,95,'> LAST MODULE: PORTFOLIO',14,WHITE)+txt(24,125,'> CONNECTION AVAILABLE',14,CYAN)
+    b+=line(24,147,w-24,147)+txt(24,178,'[ END OF TRANSMISSION ]',12,MUTED)
+    panel('footer'+suffix,w,200,b,'Sessão ativa. Sistema online. Conexão disponível.')
+    for name,number,title in [('projects-label','03','PROJECT_NETWORK'),('contact-label','06','ESTABLISH_CONNECTION')]:
+        panel(name+suffix,w,96,top(w,number+' / COMMAND CENTER',title),title)
+
+for label,key in [('GITHUB','GITHUB_URL'),('LINKEDIN','LINKEDIN_URL'),('E-MAIL','EMAIL_URL'),('PORTFOLIO','PORTFOLIO_URL')]:
+    panel('contact-'+label.lower(),200,48,txt(15,30,label+' ↗',15,GREEN,'700'),label)
+
+readme='<!-- Generated by scripts/build.py. Edit assets/profile.json, then run python scripts/build.py. -->\n\n'
+readme+=picture('header','DIOGO REIS LAGO — Software Engineering • Full Stack • Backend • AI • DevOps')+'\n\n'
+readme+='<p align="center"><a href="#profile">PROFILE</a> · <a href="#stack">STACK</a> · <a href="#projects">PROJECTS</a> · <a href="#telemetry">TELEMETRY</a> · <a href="#contact">CONTACT</a></p>\n\n'
+readme+='<a name="profile"></a>\n\n'+picture('profile-scan','ROLE: Software Engineering Student / Full Stack Developer. FOCUS: Backend, Full Stack, AI, DevOps. LOCATION: Belo Horizonte - MG - Brazil. STATUS: Available / Building / Learning.')+'\n\n'
+readme+='Sou **Diogo Reis Lago**, estudante de Engenharia de Software e desenvolvedor Full Stack. Construo aplicações web e exploro a integração entre backend, dados e inteligência artificial, com foco em código organizado, aprendizado contínuo e soluções úteis.\n\n'
+readme+='<a name="stack"></a>\n\n'+picture('tech-stack','TECH_STACK.sys — Backend, Frontend, Database, DevOps / Cloud, AI / Data e Tools.')+'\n\n'
+readme+='<details>\n<summary>Inspect modules / tecnologias em texto</summary>\n\n'
+for label,stack,desc in DATA['stack']: readme+=f'- **{label}:** {stack}. {desc}.\n'
+readme+='\n</details>\n\n<a name="projects"></a>\n\n'+picture('projects-label','PROJECT_NETWORK — quatro repositórios selecionados')+'\n\n'
+for p in DATA['projects']:
+    k='REPO_'+p['key']+'_'
+    readme+=f'<!-- {k}URL / {k}NAME / {k}DESCRIPTION / {k}STACK: edit assets/profile.json -->\n'
+    readme+=f'<a href="{escape(p[k+"URL"],quote=True)}">\n'+picture('project-card-'+p['asset'],p[k+'NAME']+' — '+p[k+'DESCRIPTION']+' Stack: '+p[k+'STACK']+'. Abrir repositório.')+'\n</a>\n\n'
+readme+='<a name="telemetry"></a>\n\n'+picture('telemetry','GITHUB_TELEMETRY — repositórios, estrelas, seguidores e linguagens. Snapshot: '+TELEMETRY['date'])+'\n\n'
+if TELEMETRY.get('contributions'): readme+=picture('activity','ACTIVITY_LOG — contribuições nos últimos 31 dias e streak do calendário público. Snapshot: '+TELEMETRY['date'])+'\n\n'
+readme+='<details>\n<summary>Inspect telemetry / origem e escopo</summary>\n\n'
+readme+=f'Snapshot: **{TELEMETRY["date"]} UTC**. [Dados utilizados](assets/telemetry.json) · [Contribuições no GitHub](https://github.com/{DATA["username"]}?tab=overview).\n\n'
+readme+='Estatísticas da API pública do GitHub. Linguagens representam bytes dos repositórios públicos próprios, excluindo forks; não medem proficiência. Os cinco maiores valores são exibidos; as porcentagens consideram todas as linguagens, incluindo notebooks. Repositórios públicos incluem forks; estrelas são somadas nesses repositórios.\n\n'
+readme+='Atividade e streak usam o calendário público do GitHub. A sequência atual admite o dia de hoje ainda sem contribuições; a maior sequência se limita à janela coletada. Os painéis são snapshots, atualizados pelo comando documentado no [guia de personalização](docs/CUSTOMIZATION.md).\n\n</details>\n\n'
+readme+=picture('mission','CURRENT_MISSION — Building scalable systems; Exploring applied AI; Improving backend architecture; Learning DevOps & Cloud; Shipping useful projects.')+'\n\n'
+readme+='<a name="contact"></a>\n\n'+picture('contact-label','ESTABLISH_CONNECTION')+'\n\n<p align="center">\n'
+for label,key in [('GITHUB','GITHUB_URL'),('LINKEDIN','LINKEDIN_URL'),('E-MAIL','EMAIL_URL'),('PORTFOLIO','PORTFOLIO_URL')]:
+    readme+=f'  <a href="{escape(DATA["contacts"][key],quote=True)}"><img src="assets/contact-{label.lower()}.svg" width="180" alt="{label}"></a>\n'
+email_url=DATA['contacts']['EMAIL_URL']
+readme+=f'</p>\n\n<p align="center"><a href="{escape(email_url,quote=True)}">{escape(email_url.removeprefix("mailto:"))}</a></p>\n\n'
+readme+=picture('footer','SESSION STATUS: ACTIVE / SYSTEM: ONLINE / LAST MODULE: PORTFOLIO / CONNECTION AVAILABLE / END OF TRANSMISSION')+'\n'
+(ROOT/'README.md').write_text(readme,encoding='utf-8')
+print('README and SVG panels generated.')
